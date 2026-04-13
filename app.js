@@ -1,0 +1,65 @@
+const express = require("express");
+const app = express();
+const mongoose = require("mongoose");
+const Listing = require("./models/listing.js");
+const path = require("path");
+
+main().then(() => {
+    console.log("connected to DB.");
+})
+.catch((err) => {
+    console.log(err);
+});
+
+async function main(){
+    await mongoose.connect("mongodb://127.0.0.1:27017/wanderlust");
+}
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(express.urlencoded({extended: true}));
+
+//Index Route -> Showing all the listings
+app.get("/listings", async(req, res) => {
+    const allListings = await Listing.find({});
+    res.render("listings/index.ejs", { allListings });
+});
+
+//New Route
+app.get("/listings/new", (req, res) => {
+    res.render("listings/new.ejs");
+});
+
+//Show Route -> To show a particular listing of a particular ID
+app.get("/listings/:id", async(req, res) => {
+    let { id } = req.params;
+    const listing = await Listing.findById(id);
+    res.render("listings/show.ejs", { listing });
+});
+
+//Create Route -> To receive the post request of the form
+app.post("/listings", async(req, res) => {
+    const newListing = new Listing(req.body.listing);
+    await newListing.save();
+    res.redirect("/listings");
+});
+
+// app.get("/testListing", async(req, res) => {
+//     let sampleListing = new Listing({
+//         title: "My new villa",
+//         description: "By the Beach",
+//         price: 4500,
+//         location: "Goa",
+//         country: "India",
+//     });
+//     await sampleListing.save();
+//     console.log("Sample was saved");
+//     res.send("successful testing.");
+// });
+app.get("/", (req, res) => {
+    res.send("Root");
+});
+
+app.listen(8080, () => {
+    console.log("Server listening to port 8080.");
+});
