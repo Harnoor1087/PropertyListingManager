@@ -46,7 +46,7 @@ import { ToastService } from '../../../core/services/toast.service';
               <button
                 type="button"
                 class="toggle-password"
-                (click)="showPassword.update(v => !v)"
+                (click)="togglePassword()"
               >{{ showPassword() ? 'Hide' : 'Show' }}</button>
             </div>
             @if (f['password'].invalid && f['password'].touched) {
@@ -182,6 +182,8 @@ export class LoginComponent {
   });
 
   get f() { return this.form.controls; }
+
+togglePassword(): void { this.showPassword.update(v => !v); }
 
   onSubmit(): void {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }

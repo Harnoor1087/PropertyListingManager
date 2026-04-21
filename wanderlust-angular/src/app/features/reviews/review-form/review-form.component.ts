@@ -23,7 +23,7 @@ import { Review } from '../../../shared/models';
               <button
                 type="button"
                 class="star-btn"
-                [class.star-btn--active]="n <= (hovered() || form.value.rating)"
+                [class.star-btn--active]="n <= (hovered() || form.value.rating || 0)"
                 (mouseenter)="hovered.set(n)"
                 (mouseleave)="hovered.set(0)"
                 (click)="setRating(n)"

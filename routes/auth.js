@@ -1,102 +1,126 @@
 const express = require("express");
-const router = express.Router();       // A mini Express app — just for auth routes
+const router = express.Router();
 const bcrypt = require("bcrypt");
 const User = require("../models/user.js");
 
-// ─── REGISTER ────────────────────────────────────────────────────────────────
+// ─── SIGNUP ───────────────────────────────────────────────────────────────────
 
-// GET /register → Show the registration form
-router.get("/register", (req, res) => {
-    res.render("auth/register.ejs");
-});
-
-// POST /register → Handle form submission
-router.post("/register", async (req, res) => {
+// POST /signup → Create a new user account
+// Angular's AuthService calls: POST http://localhost:8080/signup
+router.post("/signup", async (req, res) => {
     try {
-        const { username, email, password } = req.body; // Destructure form fields
+        const { username, email, password } = req.body;
 
-        // Check if a user with this email already exists
+        // Check for duplicate email
         const existingUser = await User.findOne({ email });
         if (existingUser) {
-            // If yes, re-render the form with an error message
-            return res.render("auth/register.ejs", { error: "Email already registered. Please login." });
+            // 409 Conflict — resource already exists
+            return res.status(409).json({ message: "Email already registered." });
         }
 
-        // Hash the password before saving.
-        // bcrypt.hash(plainText, saltRounds) returns a Promise resolving to the hash string.
-        // We never store the plain text password.
+        // Check for duplicate username
+        const existingUsername = await User.findOne({ username });
+        if (existingUsername) {
+            return res.status(409).json({ message: "Username already taken." });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create and save the new user with the hashed password
-        const newUser = new User({
-            username,
-            email,
-            password: hashedPassword, // Storing hash, not plain text
-        });
+        const newUser = new User({ username, email, password: hashedPassword });
         await newUser.save();
 
-        // Set the session — this is what "logs the user in"
-        // req.session is provided by express-session middleware
-        // We store the user's MongoDB _id so we can identify them on future requests
+        // Set session
         req.session.userId = newUser._id;
 
-        res.redirect("/listings"); // Redirect to main app
+        // Return JSON — Angular's AuthService expects { user, message }
+        // We never send the password field back to the client
+        res.status(201).json({
+            message: "Account created successfully.",
+            user: {
+                _id: newUser._id,
+                username: newUser.username,
+                email: newUser.email,
+            },
+        });
 
     } catch (err) {
         console.error(err);
-        res.render("auth/register.ejs", { error: "Something went wrong. Please try again." });
+        res.status(500).json({ message: "Something went wrong. Please try again." });
     }
 });
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 
-// GET /login → Show the login form
-router.get("/login", (req, res) => {
-    res.render("auth/login.ejs");
-});
-
-// POST /login → Handle form submission
+// POST /login → Authenticate an existing user
+// Angular's AuthService calls: POST http://localhost:8080/login
+// Note: Angular's login form sends { username, password } — NOT email
 router.post("/login", async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { username, password } = req.body; // username, not email
 
-        // Find the user by email
-        const user = await User.findOne({ email });
+        // Find user by username
+        const user = await User.findOne({ username });
         if (!user) {
-            // No user found with that email
-            return res.render("auth/login.ejs", { error: "Invalid email or password." });
+            // 401 Unauthorized — don't reveal whether it was username or password that was wrong
+            return res.status(401).json({ message: "Invalid username or password." });
         }
 
-        // bcrypt.compare(plainText, hash) → returns true if they match, false otherwise.
-        // bcrypt internally re-hashes the plain text using the salt stored in the hash string
-        // and compares — so we never need to "decrypt" anything.
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
-            return res.render("auth/login.ejs", { error: "Invalid email or password." });
+            return res.status(401).json({ message: "Invalid username or password." });
         }
 
-        // Credentials are correct — set the session
+        // Set session
         req.session.userId = user._id;
 
-        res.redirect("/listings");
+        res.status(200).json({
+            message: "Logged in successfully.",
+            user: {
+                _id: user._id,
+                username: user.username,
+                email: user.email,
+            },
+        });
 
     } catch (err) {
         console.error(err);
-        res.render("auth/login.ejs", { error: "Something went wrong. Please try again." });
+        res.status(500).json({ message: "Something went wrong. Please try again." });
     }
 });
 
 // ─── LOGOUT ───────────────────────────────────────────────────────────────────
 
-// GET /logout → Destroy the session and redirect to login
+// GET /logout → Destroy the session
+// Angular's AuthService calls: GET http://localhost:8080/logout
 router.get("/logout", (req, res) => {
-    // req.session.destroy() removes the session from the store (MongoDB) and clears the cookie
     req.session.destroy((err) => {
         if (err) {
-            console.error(err);
+            return res.status(500).json({ message: "Could not log out." });
         }
-        res.redirect("/login");
+        res.status(200).json({ message: "Logged out successfully." });
     });
+});
+
+// ─── ME ───────────────────────────────────────────────────────────────────────
+
+// GET /me → Return the currently logged-in user (used by Angular on page refresh)
+// When Angular app boots, it checks this route to restore session state.
+// If session cookie is valid → return user object
+// If not → 401, Angular clears localStorage and redirects to login
+router.get("/me", async (req, res) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json({ message: "Not authenticated." });
+    }
+    try {
+        // Find user by session id, exclude password from result using .select("-password")
+        const user = await User.findById(req.session.userId).select("-password");
+        if (!user) {
+            return res.status(401).json({ message: "User not found." });
+        }
+        res.status(200).json({ user });
+    } catch (err) {
+        res.status(500).json({ message: "Server error." });
+    }
 });
 
 module.exports = router;

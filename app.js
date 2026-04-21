@@ -1,18 +1,18 @@
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
-const Listing = require("./models/listing.js");
 const path = require("path");
-const methodOverride = require("method-override");
-const session = require("express-session");       // For creating and managing sessions
-const MongoStore = require("connect-mongo").MongoStore;      // Stores sessions in MongoDB (not in-memory)
-const isLoggedIn = require("./middleware/isLoggedIn.js"); // Our auth guard middleware
-const authRoutes = require("./routes/auth.js");   // All login/register/logout routes
+const cors = require("cors");                                        // Cross-Origin Resource Sharing
+const session = require("express-session");
+const MongoStore = require("connect-mongo").MongoStore;
+
+const authRoutes = require("./routes/auth.js");
+const listingRoutes = require("./routes/listings.js");
 
 // ─── DB CONNECTION ─────────────────────────────────────────────────────────────
 
 main().then(() => {
-    console.log("connected to DB.");
+    console.log("Connected to MongoDB.");
 }).catch((err) => {
     console.log(err);
 });
@@ -21,97 +21,47 @@ async function main() {
     await mongoose.connect("mongodb://127.0.0.1:27017/wanderlust");
 }
 
-// ─── APP SETTINGS ──────────────────────────────────────────────────────────────
-
-app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
-
-// ─── MIDDLEWARE ────────────────────────────────────────────────────────────────
-
-app.use(express.urlencoded({ extended: true })); // Parse form data from POST requests
-app.use(methodOverride("_method"));              // Allow PUT and DELETE from HTML forms
-
-// Session middleware — must be set up BEFORE any routes that use req.session
-app.use(session({
-    secret: "wanderlust_secret_key",  // Used to sign the session ID cookie. Use a strong random string in production.
-    resave: false,                    // Don't re-save session to store if nothing changed
-    saveUninitialized: false,         // Don't create a session until something is stored (e.g., after login)
-    store: MongoStore.create({
-        mongoUrl: "mongodb://127.0.0.1:27017/wanderlust", // Store sessions in our existing DB
-        ttl: 14 * 24 * 60 * 60,      // Session expiry: 14 days (in seconds)
-    }),
-    cookie: {
-        maxAge: 14 * 24 * 60 * 60 * 1000, // Cookie expiry: 14 days (in milliseconds)
-        httpOnly: true,                    // JS on the page cannot access this cookie (security)
-    }
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+// Must be configured BEFORE session and routes.
+// origin: Angular dev server URL
+// credentials: true → allows session cookies to be sent with cross-origin requests
+// Without this, the browser blocks all requests from Angular (localhost:4200) to Express (localhost:8080)
+app.use(cors({
+    origin: "http://localhost:4200",
+    credentials: true,
 }));
 
-// ─── AUTH ROUTES (PUBLIC) ──────────────────────────────────────────────────────
-// These must come BEFORE the protected listing routes.
-// /login, /register, /logout are all handled inside authRoutes.
-app.use("/", authRoutes);
+// ─── BODY PARSERS ─────────────────────────────────────────────────────────────
+app.use(express.json());                         // Parse JSON bodies (Angular sends JSON for auth)
+app.use(express.urlencoded({ extended: true })); // Parse form-encoded bodies (multer FormData)
 
-// ─── ROOT ROUTE ────────────────────────────────────────────────────────────────
+// ─── STATIC FILES ─────────────────────────────────────────────────────────────
+// Serve uploaded images as static files.
+// e.g. GET http://localhost:8080/uploads/1714000000000.jpg
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-app.get("/", (req, res) => {
-    res.redirect("/listings"); // Root redirects to listings (isLoggedIn will handle it from there)
-});
+// ─── SESSION ──────────────────────────────────────────────────────────────────
+app.use(session({
+    secret: "wanderlust_secret_key",
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: "mongodb://127.0.0.1:27017/wanderlust",
+        ttl: 14 * 24 * 60 * 60,
+    }),
+    cookie: {
+        maxAge: 14 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        // sameSite must be "lax" (not "strict") to allow cross-origin cookie sending
+        sameSite: "lax",
+    },
+}));
 
-// ─── PROTECTED LISTING ROUTES ──────────────────────────────────────────────────
-// isLoggedIn is passed as a second argument — it runs before the route handler.
-// If the user is not logged in, they get redirected to /login.
+// ─── ROUTES ───────────────────────────────────────────────────────────────────
+app.use("/", authRoutes);                // /signup, /login, /logout, /me
+app.use("/listings", listingRoutes);     // /listings and /listings/:id/reviews
 
-// Index Route → Show all listings
-app.get("/listings", isLoggedIn, async (req, res) => {
-    const allListings = await Listing.find({});
-    res.render("listings/index.ejs", { allListings });
-});
-
-// New Route → Show form to create a listing
-app.get("/listings/new", isLoggedIn, (req, res) => {
-    res.render("listings/new.ejs");
-});
-
-// Show Route → Show a particular listing by ID
-app.get("/listings/:id", isLoggedIn, async (req, res) => {
-    let { id } = req.params;
-    const listing = await Listing.findById(id);
-    if (!listing) return res.status(404).send("Listing not found.");
-    res.render("listings/show.ejs", { listing });
-});
-
-// Create Route → Save a new listing
-app.post("/listings", isLoggedIn, async (req, res) => {
-    const newListing = new Listing(req.body.listing);
-    await newListing.save();
-    res.redirect("/listings");
-});
-
-// Edit Route → Show pre-filled edit form
-app.get("/listings/:id/edit", isLoggedIn, async (req, res) => {
-    let { id } = req.params;
-    const listing = await Listing.findById(id);
-    if (!listing) return res.status(404).send("Listing not found.");
-    res.render("listings/edit.ejs", { listing });
-});
-
-// Update Route → Apply edits to a listing
-app.put("/listings/:id", isLoggedIn, async (req, res) => {
-    let { id } = req.params;
-    await Listing.findByIdAndUpdate(id, { ...req.body.listing });
-    res.redirect(`/listings/${id}`);
-});
-
-// Delete Route → Remove a listing
-app.delete("/listings/:id", isLoggedIn, async (req, res) => {
-    let { id } = req.params;
-    let deletedListing = await Listing.findByIdAndDelete(id);
-    console.log(deletedListing);
-    res.redirect("/listings");
-});
-
-// ─── SERVER ────────────────────────────────────────────────────────────────────
-
+// ─── SERVER ───────────────────────────────────────────────────────────────────
 app.listen(8080, () => {
-    console.log("Server listening to port 8080.");
+    console.log("Server listening on port 8080.");
 });

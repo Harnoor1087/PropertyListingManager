@@ -66,9 +66,7 @@ function passwordStrength(control: AbstractControl): Record<string,boolean> | nu
                 [type]="showPassword() ? 'text' : 'password'"
                 placeholder="min. 6 characters" autocomplete="new-password" />
               <button type="button" class="toggle-password"
-                (click)="showPassword.update(v => !v)">
-                {{ showPassword() ? 'Hide' : 'Show' }}
-              </button>
+  (click)="togglePassword()">{{ showPassword() ? 'Hide' : 'Show' }}</button>
             </div>
             <!-- Password strength indicator -->
             @if (f['password'].value) {
@@ -218,6 +216,9 @@ export class SignupComponent {
   });
 
   get f() { return this.form.controls; }
+togglePassword(): void {
+  this.showPassword.update(v => !v);
+}
 
   strengthWidth(): string {
     const pw = this.f['password'].value || '';
