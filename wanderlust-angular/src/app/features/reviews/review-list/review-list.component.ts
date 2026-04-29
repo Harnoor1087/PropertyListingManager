@@ -10,7 +10,7 @@ import { Review, User } from '../../../shared/models';
   standalone: true,
   imports: [CommonModule],
   template: `
-    @if (!reviews?.length) {
+    @if (!reviews.length) {
       <p class="no-reviews">No reviews yet — be the first to leave one!</p>
     } @else {
       <div class="review-list">

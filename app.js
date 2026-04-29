@@ -2,9 +2,15 @@ const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
 const path = require("path");
+const fs = require("fs");
 const cors = require("cors");                                        // Cross-Origin Resource Sharing
 const session = require("express-session");
 const MongoStore = require("connect-mongo").MongoStore;
+
+// ─── ENSURE UPLOADS FOLDER EXISTS ─────────────────────────────────────────────
+// multer will crash on the first upload if this folder doesn't exist.
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 
 const authRoutes = require("./routes/auth.js");
 const listingRoutes = require("./routes/listings.js");
@@ -52,8 +58,11 @@ app.use(session({
     cookie: {
         maxAge: 14 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        // sameSite must be "lax" (not "strict") to allow cross-origin cookie sending
-        sameSite: "lax",
+        // sameSite: "none" + secure: false → required so browsers send this cookie
+        // on cross-origin AJAX requests (Angular :4200 → Express :8080).
+        // With "lax", browsers silently drop the cookie on POST/PUT/DELETE mutations.
+        sameSite: "none",
+        secure: false,   // must be false when running on plain HTTP (local dev)
     },
 }));
 

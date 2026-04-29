@@ -4,6 +4,7 @@ import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angula
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ListingService } from '../../../core/services/listing.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { environment } from '../../../../environments/environment';
 
 const CATEGORIES = ['Beach', 'Mountain', 'City', 'Countryside', 'Cabin', 'Arctic', 'Camping', 'Farm'];
 
@@ -268,7 +269,14 @@ export class ListingFormComponent implements OnInit {
           country:     listing.country,
           category:    listing.category ?? ''
         });
-        if (listing.image?.url) this.previewUrl.set(listing.image.url);
+        if (listing.image?.url) {
+          // Stored URLs for locally-uploaded images are relative ("/uploads/...").
+          // We must prefix the backend origin so the <img> tag resolves correctly.
+          const imgUrl = listing.image.url.startsWith('http')
+            ? listing.image.url
+            : `${environment.apiUrl}${listing.image.url}`;
+          this.previewUrl.set(imgUrl);
+        }
       });
     }
   }
@@ -303,6 +311,7 @@ export class ListingFormComponent implements OnInit {
 
     request$.subscribe({
       next: (listing) => {
+        this.submitting.set(false);
         this.toast.success(this.isEdit ? 'Listing updated!' : 'Listing published!');
         this.router.navigate(['/listings', listing._id]);
       },

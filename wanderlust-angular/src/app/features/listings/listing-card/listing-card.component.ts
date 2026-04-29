@@ -11,7 +11,7 @@ import { Listing } from '../../../shared/models';
     <a [routerLink]="['/listings', listing._id]" class="card">
       <div class="card-img-wrap">
         <img
-          [src]="listing.image?.url || 'https://placehold.co/400x280?text=No+Image'"
+          [src]="listing.image.url || 'https://placehold.co/400x280?text=No+Image'"
           [alt]="listing.title"
           class="card-img"
           loading="lazy"
@@ -31,7 +31,7 @@ import { Listing } from '../../../shared/models';
             <strong>₹{{ listing.price | number }}</strong>
             <small> / night</small>
           </span>
-          <span class="card-reviews">{{ listing.reviews?.length || 0 }} reviews</span>
+          <span class="card-reviews">{{ listing.reviews.length || 0 }} reviews</span>
         </div>
       </div>
     </a>

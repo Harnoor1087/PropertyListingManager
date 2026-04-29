@@ -20,7 +20,7 @@ import { Listing } from '../../../shared/models';
 
         <!-- Hero Image -->
         <div class="detail-hero">
-          <img [src]="listing()!.image?.url || 'https://placehold.co/1200x500?text=No+Image'"
+          <img [src]="listing()!.image.url || 'https://placehold.co/1200x500?text=No+Image'"
                [alt]="listing()!.title" class="detail-hero-img" />
           <div class="hero-overlay"></div>
         </div>
@@ -53,7 +53,7 @@ import { Listing } from '../../../shared/models';
               <div class="detail-section">
                 <h2 class="section-title">
                   Reviews
-                  <span class="review-count">({{ listing()!.reviews?.length || 0 }})</span>
+                  <span class="review-count">({{ listing()!.reviews.length || 0 }})</span>
                 </h2>
                 <app-review-list
                   [reviews]="listing()!.reviews"
@@ -80,7 +80,7 @@ import { Listing } from '../../../shared/models';
                 <span class="price-unit"> / night</span>
               </div>
               <div class="booking-rating">
-                ★ {{ avgRating() }} · {{ listing()!.reviews?.length || 0 }} reviews
+                ★ {{ avgRating() }} · {{ listing()!.reviews.length || 0 }} reviews
               </div>
               <div class="booking-divider"></div>
 
